@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NSFW Roleplay AI</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #222;
+      padding: 15px;
+      text-align: center;
+      font-size: 1.6em;
+      font-weight: bold;
+      border-bottom: 2px solid #cc0000;
+    }
+    #chatContainer {
+      padding: 15px;
+      max-width: 900px;
+      margin: auto;
+    }
+    .message {
+      display: flex;
+      margin: 8px 0;
+      padding: 10px;
+      border-radius: 8px;
+      background: #222;
+    }
+    .user {
+      justify-content: flex-end;
+      background: #333;
+    }
+    .bot {
+      justify-content: flex-start;
+    }
+    .message img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    .text {
+      max-width: 80%;
+    }
+    input[type="text"], textarea, select, input[type="range"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      background: #1c1c1c;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px 0 0;
+      background: #cc0000;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #settingsPanel {
+      display: none;
+      margin-top: 15px;
+      background: #1b1b1b;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    #charImage {
+      max-width: 100px;
+      border-radius: 10px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <header>NSFW Roleplay AI</header>
+  <div id="chatContainer">
+    <div>
+      <button onclick="toggleSettings()">Settings</button>
+      <button onclick="saveSession()">Save</button>
+      <button onclick="loadSession()">Load</button>
+      <button onclick="exportCharacter()">Export Character</button>
+      <button onclick="importCharacter()">Import Character</button>
+      <input type="file" id="importFile" style="display:none" onchange="handleImport(event)">
+    </div>
+
+    <div id="settingsPanel">
+      <label>User Name:
+        <input type="text" id="userName" value="Sam">
+      </label>
+      <label>Character Name:
+        <input type="text" id="charName" value="Nona">
+      </label>
+      <label>Character Avatar URL:
+        <input type="text" id="charAvatar" placeholder="https://..." oninput="updatePreview()">
+      </label>
+      <img id="charImage" src="" alt="Avatar Preview"/>
+      <label>Character Roleplay Style:
+        <select id="rpMode">
+          <option>Flirty</option>
+          <option>Romantic</option>
+          <option>Submissive</option>
+          <option>Dominant</option>
+          <option>Loving</option>
+          <option>Yandere</option>
+          <option>Shy</option>
+          <option>Lewd</option>
+          <option>Innocent</option>
+          <option>Playful</option>
+          <option>Fantasy</option>
+          <option>Bratty</option>
+          <option>Obedient</option>
+        </select>
+      </label>
+      <label>NSFW Level:
+        <input type="range" min="0" max="10" value="5" id="nsfwLevel">
+      </label>
+      <label>Reply Length:
+        <select id="replyLength">
+          <option value="short">Short</option>
+          <option value="medium" selected>Medium</option>
+          <option value="long">Long</option>
+        </select>
+      </label>
+      <label>OpenRouter API Key:
+        <input type="text" id="apiKey">
+      </label>
+      <label>Model (e.g. openchat/openchat-3.5):
+        <input type="text" id="modelName" value="openchat/openchat-3.5">
+      </label>
+      <label>Background Theme:
+        <input type="color" id="bgColor" value="#111" onchange="document.body.style.background=this.value">
+      </label>
+    </div>
+
+    <div id="chat"></div>
+
+    <textarea id="messageInput" placeholder="Type your message..."></textarea>
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="regenerateReply()">Regenerate</button>
+  </div>
+
+  <audio id="sendSound" src="https://cdn.pixabay.com/audio/2022/08/04/audio_f88bfa7115.mp3" preload="auto"></audio>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const audio = document.getElementById("sendSound");
+
+    function toggleSettings() {
+      const panel = document.getElementById("settingsPanel");
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
+    }
+
+    function updatePreview() {
+      const img = document.getElementById("charImage");
+      img.src = document.getElementById("charAvatar").value || "";
+    }
+
+    function appendMessage(text, isUser = false) {
+      const msg = document.createElement("div");
+      msg.className = "message " + (isUser ? "user" : "bot");
+
+      const avatar = document.createElement("img");
+      avatar.src = isUser ? "" : (document.getElementById("charAvatar").value || "");
+      avatar.style.display = isUser ? "none" : "block";
+
+      const span = document.createElement("div");
+      span.className = "text";
+      span.textContent = text;
+
+      msg.appendChild(avatar);
+      msg.appendChild(span);
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+
+      if (!isUser) audio.play();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("messageInput");
+      const userText = input.value.trim();
+      if (!userText) return;
+
+      appendMessage(userText, true);
+      input.value = "";
+
+      const reply = await generateReply(userText);
+      appendMessage(reply);
+      localStorage.setItem("lastUser", userText);
+    }
+
+    async function generateReply(userInput) {
+      const user = document.getElementById("userName").value;
+      const char = document.getElementById("charName").value;
+      const mode = document.getElementById("rpMode").value;
+      const nsfw = document.getElementById("nsfwLevel").value;
+      const length = document.getElementById("replyLength").value;
+      const apiKey = document.getElementById("apiKey").value.trim();
+      const model = document.getElementById("modelName").value.trim();
+
+      const prompt = `You are ${char}, an NSFW AI partner chatting with ${user}. Your personality is ${mode}. Respond to their message with NSFW level ${nsfw} in ${length} length.\n\nUser: ${userInput}`;
+
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: `You are ${char}, responding as a ${mode} personality.` },
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+
+      const data = await res.json();
+      try {
+        return data.choices[0].message.content.trim();
+      } catch (e) {
+        return "Error: Invalid reply or API key/model.";
+      }
+    }
+
+    function regenerateReply() {
+      const last = localStorage.getItem("lastUser");
+      if (last) generateReply(last).then(r => appendMessage(r));
+    }
+
+    function saveSession() {
+      localStorage.setItem("chatLog", chat.innerHTML);
+      alert("Chat saved.");
+    }
+
+    function loadSession() {
+      chat.innerHTML = localStorage.getItem("chatLog") || "";
+    }
+
+    function exportCharacter() {
+      const charData = {
+        name: document.getElementById("charName").value,
+        avatar: document.getElementById("charAvatar").value,
+        mode: document.getElementById("rpMode").value,
+        nsfw: document.getElementById("nsfwLevel").value,
+        length: document.getElementById("replyLength").value
+      };
+      const blob = new Blob([JSON.stringify(charData)], {type: "application/json"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "character.json";
+      link.click();
+    }
+
+    function importCharacter() {
+      document.getElementById("importFile").click();
+    }
+
+    function handleImport(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = JSON.parse(evt.target.result);
+        document.getElementById("charName").value = data.name || "";
+        document.getElementById("charAvatar").value = data.avatar || "";
+        document.getElementById("rpMode").value = data.mode || "Flirty";
+        document.getElementById("nsfwLevel").value = data.nsfw || 5;
+        document.getElementById("replyLength").value = data.length || "medium";
+        updatePreview();
+        alert("Character imported.");
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
